@@ -1,51 +1,62 @@
 import os
 
-# Lista para guardar os valores
+# --- Configuração Inicial ---
 gastos = []
+total_gasto = 0.0
+arquivo_banco = "gastos.txt"
 
-# Limpando a tela (estética)
-os.system('cls' if os.name == 'nt' else 'clear')
+# 1. Tenta carregar o "caderninho" antigo (se existir)
+if os.path.exists(arquivo_banco):
+    print("📂 Carregando gastos anteriores...")
+    with open(arquivo_banco, "r") as arquivo:
+        for linha in arquivo:
+            # Quebra a linha "Cafe,5.0" em nome e valor
+            dados = linha.strip().split(",")
+            nome_salvo = dados[0]
+            valor_salvo = float(dados[1])
+            
+            # Adiciona na memória do programa
+            gastos.append({"nome": nome_salvo, "valor": valor_salvo})
+            total_gasto += valor_salvo
+else:
+    print("🆕 Nenhum registro anterior encontrado. Começando do zero!")
 
-print("--------------------------------")
-print("💰 CONTROLADOR DE ORÇAMENTO v1.0")
-print("--------------------------------")
+# --- Pergunta o Limite ---
+limite = float(input("\nQual é o seu limite diário? R$ "))
 
-# Passo 1: Definir o limite
-limite = float(input("Qual é o seu limite de gastos para hoje? R$ "))
-
+# --- Loop Principal ---
 while True:
-    # Mostra o menu
-    print("\n--- MENU ---")
+    print(f"\n--- SALDO ATUAL: R$ {limite - total_gasto:.2f} ---")
     print("1. Adicionar novo gasto")
-    print("2. Ver resumo e saldo")
+    print("2. Ver lista de gastos")
     print("3. Sair")
     
     opcao = input("Escolha uma opção: ")
 
     if opcao == "1":
-        valor = float(input("Digite o valor do gasto: R$ "))
-        gastos.append(valor)
-        print("✅ Gasto registrado!")
+        nome = input("O que você comprou? ")
+        valor = float(input("Quanto custou? R$ "))
+
+        # Atualiza a memória
+        gastos.append({"nome": nome, "valor": valor})
+        total_gasto += valor
+
+        # --- A MÁGICA: Escreve no arquivo txt ---
+        # 'a' significa append (adicionar no final)
+        with open(arquivo_banco, "a") as arquivo:
+            arquivo.write(f"{nome},{valor}\n")
+        
+        print("✅ Gasto salvo com sucesso!")
 
     elif opcao == "2":
-        total_gasto = sum(gastos)
-        saldo_restante = limite - total_gasto
-        
-        print(f"\n--- RESUMO ---")
-        print(f"Total gasto até agora: R$ {total_gasto:.2f}")
-        print(f"Limite definido:       R$ {limite:.2f}")
-        print("------------------------------")
-        
-        if saldo_restante > 0:
-            print(f"🟢 Você ainda pode gastar: R$ {saldo_restante:.2f}")
-        elif saldo_restante == 0:
-            print("⚠️ Cuidado! Seu orçamento acabou.")
-        else:
-            print(f"🔴 ALERTA: Você estourou o orçamento em R$ {abs(saldo_restante):.2f}")
+        print("\n--- Seus Gastos ---")
+        for g in gastos:
+            print(f"- {g['nome']}: R$ {g['valor']:.2f}")
+        print(f"Total gasto: R$ {total_gasto:.2f}")
+        input("Pressione Enter para voltar...")
 
     elif opcao == "3":
-        print("Encerrando o sistema...")
+        print("Saindo... Seus dados estão seguros! 💾")
         break
-
     else:
         print("Opção inválida!")
