@@ -1,3 +1,0 @@
-Pizza,50.0
-Compras mercado,60.0
-Lanche,35.0
