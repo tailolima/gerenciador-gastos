@@ -1,32 +1,78 @@
+import sqlite3
 import os
 
-# --- Configuração Inicial ---
-gastos = []
-total_gasto = 0.0
-arquivo_banco = "gastos.txt"
+# --- FUNÇÕES DE BANCO DE DADOS (O "Motor" do app) ---
 
-# 1. Tenta carregar o "caderninho" antigo (se existir)
-if os.path.exists(arquivo_banco):
-    print("📂 Carregando gastos anteriores...")
-    with open(arquivo_banco, "r") as arquivo:
-        for linha in arquivo:
-            # Quebra a linha "Cafe,5.0" em nome e valor
-            dados = linha.strip().split(",")
-            nome_salvo = dados[0]
-            valor_salvo = float(dados[1])
-            
-            # Adiciona na memória do programa
-            gastos.append({"nome": nome_salvo, "valor": valor_salvo})
-            total_gasto += valor_salvo
-else:
-    print("🆕 Nenhum registro anterior encontrado. Começando do zero!")
+def inicializar_banco():
+    """Cria a tabela e o arquivo .db se não existirem"""
+    conexao = sqlite3.connect('gastos.db')
+    cursor = conexao.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS gastos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            valor REAL NOT NULL
+        )
+    ''')
+    conexao.commit()
+    conexao.close()
+
+def adicionar_gasto(nome, valor_str):
+    """Trata o valor (troca vírgula por ponto) e salva no banco"""
+    try:
+        # Tratamento: troca vírgula por ponto para o Python entender
+        valor_limpo = float(valor_str.replace(',', '.'))
+        
+        conexao = sqlite3.connect('gastos.db')
+        cursor = conexao.cursor()
+        cursor.execute("INSERT INTO gastos (nome, valor) VALUES (?, ?)", (nome, valor_limpo))
+        conexao.commit()
+        conexao.close()
+        print("✅ Gasto salvo com segurança no Banco de Dados!")
+        return True
+    except ValueError:
+        print("❌ Erro: Valor inválido! Digite apenas números (ex: 10,50).")
+        return False
+
+def buscar_gastos():
+    """Retorna a lista completa e o total gasto"""
+    conexao = sqlite3.connect('gastos.db')
+    cursor = conexao.cursor()
+    cursor.execute("SELECT nome, valor FROM gastos")
+    dados = cursor.fetchall()
+    conexao.close()
+    
+    # Calcula o total somando a coluna de valores
+    total = sum([item[1] for item in dados])
+    return dados, total
+
+# --- INÍCIO DO PROGRAMA ---
+
+inicializar_banco()
+
+print("📂 Sistema de Gastos com SQLite Iniciado...")
+
+# Pega o total atual do banco para começar o dia certo
+_, total_gasto_inicial = buscar_gastos()
 
 # --- Pergunta o Limite ---
-limite = float(input("\nQual é o seu limite diário? R$ "))
+try:
+    limite_input = input("\nQual é o seu limite diário? R$ ").replace(',', '.')
+    limite = float(limite_input)
+except ValueError:
+    print("Valor inválido. Definindo limite padrão de R$ 100.00")
+    limite = 100.0
 
 # --- Loop Principal ---
 while True:
-    print(f"\n--- SALDO ATUAL: R$ {limite - total_gasto:.2f} ---")
+    # Recalcula o total atualizado direto do banco
+    lista_atual, total_atual = buscar_gastos()
+    saldo = limite - total_atual
+
+    print(f"\n--- SALDO RESTANTE: R$ {saldo:.2f} ---")
+    if saldo < 0:
+        print("⚠️  ATENÇÃO: VOCÊ ESTOUROU O ORÇAMENTO! ⚠️")
+    
     print("1. Adicionar novo gasto")
     print("2. Ver lista de gastos")
     print("3. Sair")
@@ -35,28 +81,26 @@ while True:
 
     if opcao == "1":
         nome = input("O que você comprou? ")
-        valor = float(input("Quanto custou? R$ "))
-
-        # Atualiza a memória
-        gastos.append({"nome": nome, "valor": valor})
-        total_gasto += valor
-
-        # --- A MÁGICA: Escreve no arquivo txt ---
-        # 'a' significa append (adicionar no final)
-        with open(arquivo_banco, "a") as arquivo:
-            arquivo.write(f"{nome},{valor}\n")
+        # Agora lemos como TEXTO (input puro) para tratar a vírgula depois
+        valor_texto = input("Quanto custou? R$ ")
         
-        print("✅ Gasto salvo com sucesso!")
+        adicionar_gasto(nome, valor_texto)
 
     elif opcao == "2":
-        print("\n--- Seus Gastos ---")
-        for g in gastos:
-            print(f"- {g['nome']}: R$ {g['valor']:.2f}")
-        print(f"Total gasto: R$ {total_gasto:.2f}")
+        print("\n--- 📝 Histórico de Gastos (Do Banco de Dados) ---")
+        if not lista_atual:
+            print("Nenhum gasto registrado ainda.")
+        else:
+            for item in lista_atual:
+                # item[0] é o nome, item[1] é o valor
+                print(f"- {item[0]}: R$ {item[1]:.2f}")
+        
+        print(f"----------------------")
+        print(f"TOTAL GASTO: R$ {total_atual:.2f}")
         input("Pressione Enter para voltar...")
 
     elif opcao == "3":
-        print("Saindo... Seus dados estão seguros! 💾")
+        print("Saindo... Seus dados estão salvos no arquivo 'gastos.db'! 💾")
         break
     else:
         print("Opção inválida!")
