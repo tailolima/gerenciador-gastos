@@ -1,7 +1,7 @@
 import sqlite3
 import os
 
-# --- FUNÇÕES DE BANCO DE DADOS (O "Motor" do app) ---
+# --- FUNÇÕES DE BANCO DE DADOS ---
 
 def inicializar_banco():
     """Cria a tabela e o arquivo .db se não existirem"""
@@ -18,9 +18,9 @@ def inicializar_banco():
     conexao.close()
 
 def adicionar_gasto(nome, valor_str):
-    """Trata o valor (troca vírgula por ponto) e salva no banco"""
+    """Trata o valor e salva no banco"""
     try:
-        # Tratamento: troca vírgula por ponto para o Python entender
+        # Troca vírgula por ponto para o Python entender
         valor_limpo = float(valor_str.replace(',', '.'))
         
         conexao = sqlite3.connect('gastos.db')
@@ -28,34 +28,54 @@ def adicionar_gasto(nome, valor_str):
         cursor.execute("INSERT INTO gastos (nome, valor) VALUES (?, ?)", (nome, valor_limpo))
         conexao.commit()
         conexao.close()
-        print("✅ Gasto salvo com segurança no Banco de Dados!")
+        print("✅ Gasto salvo com sucesso!")
         return True
     except ValueError:
         print("❌ Erro: Valor inválido! Digite apenas números (ex: 10,50).")
         return False
 
 def buscar_gastos():
-    """Retorna a lista completa e o total gasto"""
+    """Retorna a lista completa (ID, Nome, Valor) e o total gasto"""
     conexao = sqlite3.connect('gastos.db')
     cursor = conexao.cursor()
-    cursor.execute("SELECT nome, valor FROM gastos")
+    # ATENÇÃO: Agora pegamos também o 'id'
+    cursor.execute("SELECT id, nome, valor FROM gastos")
     dados = cursor.fetchall()
     conexao.close()
     
-    # Calcula o total somando a coluna de valores
-    total = sum([item[1] for item in dados])
+    # Soma o total (o valor é o item[2] agora)
+    total = sum([item[2] for item in dados])
     return dados, total
+
+def remover_gasto(id_gasto):
+    """Remove um gasto baseado no ID"""
+    conexao = sqlite3.connect('gastos.db')
+    cursor = conexao.cursor()
+    
+    # Tenta apagar a linha onde o id é igual ao informado
+    cursor.execute("DELETE FROM gastos WHERE id = ?", (id_gasto,))
+    
+    # Verifica se alguma linha foi afetada (se deletou de verdade)
+    linhas_afetadas = cursor.rowcount
+    
+    conexao.commit()
+    conexao.close()
+
+    if linhas_afetadas > 0:
+        print(f"✅ Gasto #{id_gasto} removido com sucesso!")
+    else:
+        print(f"❌ Erro: Não encontrei nenhum gasto com o ID {id_gasto}.")
 
 # --- INÍCIO DO PROGRAMA ---
 
 inicializar_banco()
 
-print("📂 Sistema de Gastos com SQLite Iniciado...")
+print("📂 Sistema de Gastos (v2.0) Iniciado...")
 
-# Pega o total atual do banco para começar o dia certo
+# Busca inicial para calcular o saldo
 _, total_gasto_inicial = buscar_gastos()
 
-# --- Pergunta o Limite ---
+# Pergunta o Limite
 try:
     limite_input = input("\nQual é o seu limite diário? R$ ").replace(',', '.')
     limite = float(limite_input)
@@ -65,42 +85,51 @@ except ValueError:
 
 # --- Loop Principal ---
 while True:
-    # Recalcula o total atualizado direto do banco
+    # Atualiza os dados a cada volta do menu
     lista_atual, total_atual = buscar_gastos()
     saldo = limite - total_atual
 
     print(f"\n--- SALDO RESTANTE: R$ {saldo:.2f} ---")
     if saldo < 0:
-        print("⚠️  ATENÇÃO: VOCÊ ESTOUROU O ORÇAMENTO! ⚠️")
+        print("⚠️  VOCÊ ESTOUROU O ORÇAMENTO! ⚠️")
     
-    print("1. Adicionar novo gasto")
-    print("2. Ver lista de gastos")
+    print("1. Adicionar gasto")
+    print("2. Ver lista (com IDs)")
     print("3. Sair")
+    print("4. Remover um gasto") # Nova opção!
     
     opcao = input("Escolha uma opção: ")
 
     if opcao == "1":
         nome = input("O que você comprou? ")
-        # Agora lemos como TEXTO (input puro) para tratar a vírgula depois
         valor_texto = input("Quanto custou? R$ ")
-        
         adicionar_gasto(nome, valor_texto)
 
     elif opcao == "2":
-        print("\n--- 📝 Histórico de Gastos (Do Banco de Dados) ---")
+        print("\n--- 📝 Seus Gastos ---")
         if not lista_atual:
-            print("Nenhum gasto registrado ainda.")
+            print("Nenhum gasto registrado.")
         else:
             for item in lista_atual:
-                # item[0] é o nome, item[1] é o valor
-                print(f"- {item[0]}: R$ {item[1]:.2f}")
+                # item[0]=ID, item[1]=Nome, item[2]=Valor
+                print(f"ID: {item[0]} | {item[1]} - R$ {item[2]:.2f}")
         
         print(f"----------------------")
         print(f"TOTAL GASTO: R$ {total_atual:.2f}")
         input("Pressione Enter para voltar...")
 
     elif opcao == "3":
-        print("Saindo... Seus dados estão salvos no arquivo 'gastos.db'! 💾")
+        print("Saindo... Até a próxima! 👋")
         break
+
+    elif opcao == "4":
+        # Nova funcionalidade de deletar
+        try:
+            print("\n(Dica: Use a opção 2 para ver os IDs)")
+            id_para_apagar = int(input("Digite o número do ID que deseja apagar: "))
+            remover_gasto(id_para_apagar)
+        except ValueError:
+            print("❌ Erro: Digite apenas o número do ID.")
+
     else:
         print("Opção inválida!")
