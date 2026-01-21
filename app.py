@@ -1,135 +1,207 @@
+#!/usr/bin/env python3
 import sqlite3
-import os
+import sys
+from dataclasses import dataclass
+from typing import List, Optional
+import matplotlib.pyplot as plt
 
-# --- FUNÇÕES DE BANCO DE DADOS ---
+# --- Configurações e Constantes ---
+DB_NAME = "finance.db"
 
-def inicializar_banco():
-    """Cria a tabela e o arquivo .db se não existirem"""
-    conexao = sqlite3.connect('gastos.db')
-    cursor = conexao.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS gastos (
+# --- Camada de Modelo (Model) ---
+@dataclass
+class Expense:
+    """Representa um registro de despesa no domínio da aplicação."""
+    name: str
+    amount: float
+    id: Optional[int] = None
+
+    def __post_init__(self):
+        if self.amount < 0:
+            raise ValueError("O valor da despesa não pode ser negativo.")
+
+# --- Camada de Acesso a Dados (DAO - Data Access Object) ---
+class ExpenseRepository:
+    """Gerencia todas as interações com o banco de dados SQLite."""
+    
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self._initialize_db()
+
+    def _get_connection(self) -> sqlite3.Connection:
+        return sqlite3.connect(self.db_path)
+
+    def _initialize_db(self) -> None:
+        """Garante que a estrutura da tabela exista."""
+        query = """
+        CREATE TABLE IF NOT EXISTS expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            valor REAL NOT NULL
+            name TEXT NOT NULL,
+            amount REAL NOT NULL
         )
-    ''')
-    conexao.commit()
-    conexao.close()
+        """
+        with self._get_connection() as conn:
+            conn.execute(query)
 
-def adicionar_gasto(nome, valor_str):
-    """Trata o valor e salva no banco"""
-    try:
-        # Troca vírgula por ponto para o Python entender
-        valor_limpo = float(valor_str.replace(',', '.'))
+    def add(self, expense: Expense) -> None:
+        query = "INSERT INTO expenses (name, amount) VALUES (?, ?)"
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (expense.name, expense.amount))
+            expense.id = cursor.lastrowid
+
+    def get_all(self) -> List[Expense]:
+        query = "SELECT id, name, amount FROM expenses"
+        expenses = []
+        with self._get_connection() as conn:
+            cursor = conn.execute(query)
+            for row in cursor.fetchall():
+                # Converte a tupla crua do banco para nosso Objeto Expense
+                expenses.append(Expense(id=row[0], name=row[1], amount=row[2]))
+        return expenses
+
+    def delete(self, expense_id: int) -> bool:
+        query = "DELETE FROM expenses WHERE id = ?"
+        with self._get_connection() as conn:
+            cursor = conn.execute(query, (expense_id,))
+            return cursor.rowcount > 0
+
+# --- Camada de Serviços (Services/Business Logic) ---
+class ChartService:
+    """Responsável apenas pela visualização de dados."""
+    
+    @staticmethod
+    def show_pie_chart(expenses: List[Expense]) -> None:
+        if not expenses:
+            print("⚠️  Não há dados suficientes para gerar analytics.")
+            return
+
+        labels = [e.name for e in expenses]
+        values = [e.amount for e in expenses]
+
+        plt.figure(figsize=(10, 6))
+        plt.pie(values, labels=labels, autopct='%1.1f%%', shadow=True, startangle=140)
+        plt.title('Distribuição Orçamentária')
+        plt.axis('equal')
         
-        conexao = sqlite3.connect('gastos.db')
-        cursor = conexao.cursor()
-        cursor.execute("INSERT INTO gastos (nome, valor) VALUES (?, ?)", (nome, valor_limpo))
-        conexao.commit()
-        conexao.close()
-        print("✅ Gasto salvo com sucesso!")
-        return True
-    except ValueError:
-        print("❌ Erro: Valor inválido! Digite apenas números (ex: 10,50).")
-        return False
+        print("📊 Dashboard gerado. Verifique a janela popup.")
+        plt.show()
 
-def buscar_gastos():
-    """Retorna a lista completa (ID, Nome, Valor) e o total gasto"""
-    conexao = sqlite3.connect('gastos.db')
-    cursor = conexao.cursor()
-    # ATENÇÃO: Agora pegamos também o 'id'
-    cursor.execute("SELECT id, nome, valor FROM gastos")
-    dados = cursor.fetchall()
-    conexao.close()
-    
-    # Soma o total (o valor é o item[2] agora)
-    total = sum([item[2] for item in dados])
-    return dados, total
+# --- Camada de Apresentação (CLI/Controller) ---
+class ExpenseApp:
+    """Controlador principal da interface de linha de comando."""
 
-def remover_gasto(id_gasto):
-    """Remove um gasto baseado no ID"""
-    conexao = sqlite3.connect('gastos.db')
-    cursor = conexao.cursor()
-    
-    # Tenta apagar a linha onde o id é igual ao informado
-    cursor.execute("DELETE FROM gastos WHERE id = ?", (id_gasto,))
-    
-    # Verifica se alguma linha foi afetada (se deletou de verdade)
-    linhas_afetadas = cursor.rowcount
-    
-    conexao.commit()
-    conexao.close()
+    def __init__(self):
+        self.repository = ExpenseRepository(DB_NAME)
+        self.budget_limit = 0.0
 
-    if linhas_afetadas > 0:
-        print(f"✅ Gasto #{id_gasto} removido com sucesso!")
-    else:
-        print(f"❌ Erro: Não encontrei nenhum gasto com o ID {id_gasto}.")
-
-# --- INÍCIO DO PROGRAMA ---
-
-inicializar_banco()
-
-print("📂 Sistema de Gastos (v2.0) Iniciado...")
-
-# Busca inicial para calcular o saldo
-_, total_gasto_inicial = buscar_gastos()
-
-# Pergunta o Limite
-try:
-    limite_input = input("\nQual é o seu limite diário? R$ ").replace(',', '.')
-    limite = float(limite_input)
-except ValueError:
-    print("Valor inválido. Definindo limite padrão de R$ 100.00")
-    limite = 100.0
-
-# --- Loop Principal ---
-while True:
-    # Atualiza os dados a cada volta do menu
-    lista_atual, total_atual = buscar_gastos()
-    saldo = limite - total_atual
-
-    print(f"\n--- SALDO RESTANTE: R$ {saldo:.2f} ---")
-    if saldo < 0:
-        print("⚠️  VOCÊ ESTOUROU O ORÇAMENTO! ⚠️")
-    
-    print("1. Adicionar gasto")
-    print("2. Ver lista (com IDs)")
-    print("3. Sair")
-    print("4. Remover um gasto") # Nova opção!
-    
-    opcao = input("Escolha uma opção: ")
-
-    if opcao == "1":
-        nome = input("O que você comprou? ")
-        valor_texto = input("Quanto custou? R$ ")
-        adicionar_gasto(nome, valor_texto)
-
-    elif opcao == "2":
-        print("\n--- 📝 Seus Gastos ---")
-        if not lista_atual:
-            print("Nenhum gasto registrado.")
-        else:
-            for item in lista_atual:
-                # item[0]=ID, item[1]=Nome, item[2]=Valor
-                print(f"ID: {item[0]} | {item[1]} - R$ {item[2]:.2f}")
+    def run(self):
+        print("🚀 Inicializando Sistema Financeiro v3.0 (Enterprise Ed.)")
+        self._configure_budget()
         
-        print(f"----------------------")
-        print(f"TOTAL GASTO: R$ {total_atual:.2f}")
-        input("Pressione Enter para voltar...")
+        while True:
+            self._show_dashboard_summary()
+            self._print_menu()
+            
+            choice = input(">> Opção: ").strip()
+            
+            if choice == "1":
+                self._handle_add_expense()
+            elif choice == "2":
+                self._handle_list_expenses()
+            elif choice == "3":
+                print("\nEncerrando sessão. Até logo.")
+                sys.exit(0)
+            elif choice == "4":
+                self._handle_remove_expense()
+            elif choice == "5":
+                self._handle_chart()
+            else:
+                print("❌ Opção desconhecida.")
 
-    elif opcao == "3":
-        print("Saindo... Até a próxima! 👋")
-        break
+    def _configure_budget(self):
+        while True:
+            try:
+                # Ajuste: se o usuário der Enter sem nada, assume 100
+                raw_input = input("\nDefina seu budget diário (R$) [Padrao: 100]: ").replace(',', '.')
+                if not raw_input:
+                    self.budget_limit = 100.0
+                else:
+                    self.budget_limit = float(raw_input)
+                break
+            except ValueError:
+                print("❌ Valor inválido. Use formato numérico (ex: 150.00)")
 
-    elif opcao == "4":
-        # Nova funcionalidade de deletar
+    def _show_dashboard_summary(self):
+        # CORREÇÃO APLICADA AQUI:
+        expenses = self.repository.get_all()
+        
+        total_spent = sum(e.amount for e in expenses)
+        balance = self.budget_limit - total_spent
+        
+        status_icon = "🟢" if balance >= 0 else "🔴 ALERT"
+        print(f"\n{'='*40}")
+        print(f"💰 BUDGET: R$ {self.budget_limit:.2f} | GASTO: R$ {total_spent:.2f}")
+        print(f"📉 SALDO:  R$ {balance:.2f} {status_icon}")
+        print(f"{'='*40}")
+
+    def _print_menu(self):
+        menu = [
+            "1. Registrar Despesa",
+            "2. Relatório Detalhado",
+            "3. Sair",
+            "4. Remover Registro",
+            "5. Analytics (Gráfico)"
+        ]
+        print("\n" + "\n".join(menu))
+
+    def _handle_add_expense(self):
+        name = input("Descrição: ")
         try:
-            print("\n(Dica: Use a opção 2 para ver os IDs)")
-            id_para_apagar = int(input("Digite o número do ID que deseja apagar: "))
-            remover_gasto(id_para_apagar)
+            amount_str = input("Valor (R$): ").replace(',', '.')
+            amount = float(amount_str)
+            expense = Expense(name=name, amount=amount)
+            self.repository.add(expense)
+            print("✅ Registro persistido com sucesso.")
         except ValueError:
-            print("❌ Erro: Digite apenas o número do ID.")
+            print("❌ Erro de input: Certifique-se de digitar um número válido.")
 
-    else:
-        print("Opção inválida!")
+    def _handle_list_expenses(self):
+        expenses = self.repository.get_all()
+        if not expenses:
+            print("\n📭 Nenhum registro encontrado.")
+            return
+            
+        print("\n--- Relatório de Despesas ---")
+        print(f"{'ID':<5} {'DESCRIÇÃO':<20} {'VALOR'}")
+        print("-" * 35)
+        for e in expenses:
+            print(f"#{e.id:<4} {e.name:<20} R$ {e.amount:.2f}")
+
+    def _handle_remove_expense(self):
+        try:
+            self._handle_list_expenses()
+            input_val = input("\nID para remoção: ")
+            if not input_val: return # Se der enter vazio, cancela
+            
+            id_to_remove = int(input_val)
+            
+            if self.repository.delete(id_to_remove):
+                print(f"✅ Registro #{id_to_remove} removido.")
+            else:
+                print(f"⚠️ ID #{id_to_remove} não localizado.")
+        except ValueError:
+            print("❌ ID deve ser um número inteiro.")
+
+    def _handle_chart(self):
+        expenses = self.repository.get_all()
+        ChartService.show_pie_chart(expenses)
+
+# --- Entry Point ---
+if __name__ == "__main__":
+    try:
+        app = ExpenseApp()
+        app.run()
+    except KeyboardInterrupt:
+        print("\n\nInterrupção forçada. Saindo...")
+        sys.exit(0)

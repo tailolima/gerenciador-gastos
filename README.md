@@ -1,24 +1,28 @@
-# 💰 Gerente de Gastos (v2.0)
+# 💼 Financial Manager (Enterprise Edition)
 
-Um sistema eficiente em linha de comando (CLI) para controle financeiro pessoal. Este projeto utiliza Python e Banco de Dados SQL para garantir segurança e persistência dos dados.
+Sistema de gestão financeira pessoal desenvolvido em Python, focado em **Arquitetura de Software**, **Clean Code** e **Visualização de Dados**.
 
-## 🚀 Funcionalidades
+O projeto evoluiu de um script procedural simples para uma aplicação estruturada seguindo padrões de projeto de mercado.
 
-- ✅ **Adicionar Gastos:** Registre nome e valor (aceita vírgula ou ponto).
-- ✅ **Listar Gastos:** Visualize seu histórico completo com IDs únicos.
-- ✅ **Controle de Orçamento:** Defina um limite diário e veja seu saldo em tempo real.
-- ✅ **Remover Gastos:** Apague registros errados ou antigos direto do banco de dados.
-- ✅ **Persistência de Dados:** Nada é perdido ao fechar o app.
+## 🚀 Destaques de Engenharia
 
-## 🛠️ Tecnologias Utilizadas
+Este não é apenas um script de automação. O projeto implementa conceitos avançados:
 
-- **Python 3** (Lógica e Interface CLI)
-- **SQLite3** (Banco de Dados Relacional embutido)
-- **Git/GitHub** (Versionamento e Portfólio)
+- **Arquitetura MVC (Model-View-Controller):** Separação clara entre interface, lógica de negócios e dados.
+- **Padrão DAO (Data Access Object):** Camada de persistência isolada (`ExpenseRepository`), abstraindo comandos SQL do resto da aplicação.
+- **Type Hinting & Dataclasses:** Uso de tipagem estática e classes de dados para garantir robustez e previsibilidade no código.
+- **Data Visualization:** Integração com `Matplotlib` para geração de analytics (Dashboards).
+- **Tratamento de Erros:** Gestão robusta de exceções (Input/Output).
 
-## ⚙️ Como rodar
+## 🛠️ Stack Tecnológico
 
-1. Certifique-se de ter o Python instalado.
-2. Clone o repositório:
+- **Linguagem:** Python 3.10+
+- **Banco de Dados:** SQLite3 (Nativo)
+- **Analytics:** Matplotlib
+- **Paradigma:** Orientação a Objetos (OOP)
+
+## ⚙️ Como rodar o projeto
+
+1. **Clone o repositório:**
    ```bash
-   git clone [https://github.com/SEU-USUARIO/gerente-gastos.git](https://github.com/SEU-USUARIO/gerente-gastos.git)
+   git clone [https://github.com/SEU-USUARIO/gerenciador-gastos.git](https://github.com/SEU-USUARIO/gerenciador-gastos.git)
